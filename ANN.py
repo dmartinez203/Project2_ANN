@@ -16,6 +16,10 @@ df = pd.read_csv(csv_path)
 start_year, end_year = 2010, 2015
 df['season_start'] = df['season'].apply(lambda x: int(x.split('-')[0]))
 df = df[(df['season_start'] >= start_year) & (df['season_start'] <= end_year)]
+
+# Remove duplicate players
+df = df.drop_duplicates(subset=['player_name'], keep='first')
+
 if len(df) < 100:
     raise ValueError("Not enough players in the chosen window.")
 df = df.sample(100, random_state=42)  # pool of 100
@@ -98,7 +102,7 @@ for epoch in range(num_epochs):
     loss_history.append(epoch_loss)
     print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}")
 
-# Save model
+# Save model & labels
 torch.save(model.state_dict(), "model_state_dict.pt")
 with open("label_names.json", "w") as f: 
     json.dump(["Low", "High"], f)
@@ -118,19 +122,21 @@ print(f"Test Accuracy: {correct/total:.4f}")
 # --------------------------
 # Select Optimal Team (unique players)
 # --------------------------
-df['prob_high'] = torch.softmax(model(torch.tensor(X, dtype=torch.float32).to(device)), dim=1)[:,1].cpu().detach().numpy()
+with torch.no_grad():
+    df['prob_high'] = torch.softmax(model(torch.tensor(X, dtype=torch.float32).to(device)), dim=1)[:,1].cpu().numpy()
 
 assigned_players = set()
 roles = {}
 
-# Role heuristics with uniqueness
+# Helper: pick top player for role that hasn't been assigned yet
 def pick_unique(df_sorted):
     for idx, row in df_sorted.iterrows():
         if row['player_name'] not in assigned_players:
             assigned_players.add(row['player_name'])
             return row
-    return df_sorted.iloc[0]  # fallback, shouldn't happen
+    return df_sorted.iloc[0]  # fallback
 
+# Define roles heuristically
 roles['PG'] = pick_unique(df.sort_values("ast_pct", ascending=False))
 roles['SG'] = pick_unique(df.sort_values(["ts_pct","usg_pct"], ascending=[False,False]))
 roles['SF'] = pick_unique(df.iloc[((df[['pts','reb','ast']].sum(axis=1) - df[['pts','reb','ast']].sum(axis=1).mean()).abs()).argsort()])
