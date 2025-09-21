@@ -32,7 +32,7 @@ scaler, label_names, model = load_resources()
 # --------------------------
 # App interface
 # --------------------------
-st.title("🏀 NBA Optimal Team Selector (MLP)")
+st.title("🏀 NBA Optimal Team Selector")
 st.caption("Select a 5-year window, predict player performance, and build an optimal team!")
 
 uploaded = st.file_uploader("Upload NBA CSV", type="csv")
