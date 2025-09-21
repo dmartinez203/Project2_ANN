@@ -116,19 +116,27 @@ with torch.no_grad():
 print(f"Test Accuracy: {correct/total:.4f}")
 
 # --------------------------
-# Select Optimal Team
+# Select Optimal Team (unique players)
 # --------------------------
-with torch.no_grad():
-    df['prob_high'] = torch.softmax(model(torch.tensor(X, dtype=torch.float32).to(device)), dim=1)[:,1].cpu().detach().numpy()
+df['prob_high'] = torch.softmax(model(torch.tensor(X, dtype=torch.float32).to(device)), dim=1)[:,1].cpu().detach().numpy()
 
-# role heuristics
-roles = {
-    "PG": df.sort_values("ast_pct", ascending=False).iloc[0],
-    "SG": df.sort_values(["ts_pct","usg_pct"], ascending=[False,False]).iloc[0],
-    "SF": df.iloc[((df[['pts','reb','ast']].sum(axis=1) - df[['pts','reb','ast']].sum(axis=1).mean()).abs()).argmin()],
-    "PF": df.sort_values(["reb","oreb_pct"], ascending=[False,False]).iloc[0],
-    "C": df.sort_values(["reb","dreb_pct"], ascending=[False,False]).iloc[0],
-}
-print("\nOptimal Team:")
+assigned_players = set()
+roles = {}
+
+# Role heuristics with uniqueness
+def pick_unique(df_sorted):
+    for idx, row in df_sorted.iterrows():
+        if row['player_name'] not in assigned_players:
+            assigned_players.add(row['player_name'])
+            return row
+    return df_sorted.iloc[0]  # fallback, shouldn't happen
+
+roles['PG'] = pick_unique(df.sort_values("ast_pct", ascending=False))
+roles['SG'] = pick_unique(df.sort_values(["ts_pct","usg_pct"], ascending=[False,False]))
+roles['SF'] = pick_unique(df.iloc[((df[['pts','reb','ast']].sum(axis=1) - df[['pts','reb','ast']].sum(axis=1).mean()).abs()).argsort()])
+roles['PF'] = pick_unique(df.sort_values(["reb","oreb_pct"], ascending=[False,False]))
+roles['C']  = pick_unique(df.sort_values(["reb","dreb_pct"], ascending=[False,False]))
+
+print("\nOptimal Team (Unique Players):")
 for role, player in roles.items():
     print(f"{role}: {player['player_name']} (P={player['prob_high']:.2f})")
